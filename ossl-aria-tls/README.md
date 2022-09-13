@@ -1,7 +1,7 @@
 # ossl-aria-tls
 + TLS connection test with aria.
 + Modified from {openssl}/demos/sslecho.
-+ Server require certificate from client.
++ Server requires certificate from client.
 
 # Howto
 ```
