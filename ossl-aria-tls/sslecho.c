@@ -68,12 +68,21 @@ SSL_CTX* create_context(bool isServer)
         method = TLS_server_method();
     else
         method = TLS_client_method();
-
+    
     ctx = SSL_CTX_new(method);
     if (ctx == NULL) {
         perror("Unable to create SSL context");
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
+    }
+    
+    /* Enforce use aria.. Note that openssl does not support TLS1.3 with aria.. */
+    SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+    
+    int res = SSL_CTX_set_cipher_list(ctx, "ARIA128-GCM-SHA256");
+    if (res == 0){
+        perror("Unable to set cipher");
+        ERR_print_errors_fp(stderr);
     }
 
     return ctx;
@@ -82,19 +91,49 @@ SSL_CTX* create_context(bool isServer)
 void configure_server_context(SSL_CTX *ctx)
 {
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_chain_file(ctx, "cert.pem") <= 0) {
+    if (SSL_CTX_use_certificate_chain_file(ctx, "server_cert.pem") <= 0) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_PrivateKey_file(ctx, "server_key.pem", SSL_FILETYPE_PEM) <= 0) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
+
+
+    /*
+     * Configure the server to abort the handshake if certificate verification
+     * fails
+     */
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+#if 1
+    /*
+     * In a real application you would probably just use the default system certificate trust store and call:
+     *     SSL_CTX_set_default_verify_paths(ctx);
+     * In this demo though we are using a self-signed certificate, so the client must trust it directly.
+     */
+    if (!SSL_CTX_load_verify_locations(ctx, "client_cert.pem", NULL)) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+#endif
 }
 
 void configure_client_context(SSL_CTX *ctx)
 {
+#if 1
+    /* Set the key and cert */
+    if (SSL_CTX_use_certificate_chain_file(ctx, "client_cert.pem") <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, "client_key.pem", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+#endif
     /*
      * Configure the client to abort the handshake if certificate verification
      * fails
@@ -105,7 +144,7 @@ void configure_client_context(SSL_CTX *ctx)
      *     SSL_CTX_set_default_verify_paths(ctx);
      * In this demo though we are using a self-signed certificate, so the client must trust it directly.
      */
-    if (!SSL_CTX_load_verify_locations(ctx, "cert.pem", NULL)) {
+    if (!SSL_CTX_load_verify_locations(ctx, "server_cert.pem", NULL)) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
@@ -204,7 +243,8 @@ int main(int argc, char **argv)
                 server_running = false;
             } else {
 
-                printf("Client SSL connection accepted\n\n");
+                printf("Client SSL connection accepted(%s)\n\n", 
+                        SSL_get_cipher_name(ssl));
 
                 /* Echo loop */
                 while (true) {
@@ -269,13 +309,16 @@ int main(int argc, char **argv)
         SSL_set_fd(ssl, client_skt);
         /* Set host name for SNI */
         SSL_set_tlsext_host_name(ssl, rem_server_ip);
+
+#if 0
         /* Configure server hostname check */
         SSL_set1_host(ssl, rem_server_ip);
+#endif
 
         /* Now do SSL connect with server */
         if (SSL_connect(ssl) == 1) {
-
-            printf("SSL connection to server successful\n\n");
+            printf("SSL connection to server successful(%s)\n\n", 
+                        SSL_get_cipher_name(ssl));
 
             /* Loop to send input from keyboard */
             while (true) {
