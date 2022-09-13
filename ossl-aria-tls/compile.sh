@@ -1,0 +1,1 @@
+gcc -o sslecho sslecho.c -lcrypto -lssl
