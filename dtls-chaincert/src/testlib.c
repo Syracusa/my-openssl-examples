@@ -51,21 +51,29 @@ add_trust_store_ca_cert_file(X509_STORE *trust_store, char *cacertfile)
     X509 *x509;
     FILE *f = fopen(cacertfile, "r");
 
-    x509 = PEM_read_X509(f, NULL, NULL, NULL);
+    if (f != NULL){
+        x509 = PEM_read_X509(f, NULL, NULL, NULL);
 
-    if (x509)
-    {
-        X509_STORE_add_cert(trust_store, x509);
+        if (x509)
+        {
+            X509_STORE_add_cert(trust_store, x509);
+            fprintf(stderr,
+                    "Successfully add CA Certificate from file %s\n",
+                    cacertfile);
+        }
+        else
+        {
+            fprintf(stderr,
+                    "Fail to add CA Certificate from file %s\n",
+                    cacertfile);
+        }
+        fclose(f);
+    } else {    
         fprintf(stderr,
-                "Successfully add CA Certificate from file %s\n",
+                "No file named %s\n",
                 cacertfile);
-    }
-    else
-    {
-        fprintf(stderr,
-                "Fail to add CA Certificate from file %s\n",
-                cacertfile);
-    }
+    }   
+
 }
 
 static void ossl_pick_and_prt_err()
@@ -84,7 +92,16 @@ void init_ssl_context_from_file(SSL_CTX **ssl_ctx,
                                 char *certfile,
                                 char *pkeyfile)
 {
+#if USE_DTLS
     SSL_CTX *ssl_context = SSL_CTX_new(DTLS_method());
+    printf("USE DTLS\n");
+#else
+    SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
+    printf("USE TLS\n");
+#endif
+
+    SSL_CTX_set_max_proto_version(ssl_context, TLS1_2_VERSION);
+
     if (!ssl_context)
     {
         printf("Error creating SSL Context\n");
@@ -96,7 +113,7 @@ void init_ssl_context_from_file(SSL_CTX **ssl_ctx,
     SSL_CTX_set_verify_depth(ssl_context, 2);
 #if USE_ARIA128
     SSL_CTX_set_cipher_list(ssl_context,
-                            "ARIA128");
+                            "ARIA");
 #else
     SSL_CTX_set_cipher_list(ssl_context,
                             "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");

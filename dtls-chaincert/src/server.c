@@ -15,31 +15,42 @@
 
 #include "testlib.h"
 #include "sock.h"
+#include "ossl_debug.h"
 
 static int sendto_client(int sock, char *buf, int datalen)
 {
+    int sendres;
+    
+#if USE_DTLS
     static struct sockaddr_in server_addr;
     static int address_set = 0;
 
     if (address_set == 0)
     {
         server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(CLIENT_UDP_PORT);
-        inet_aton("127.0.0.1", &server_addr.sin_addr);
+        server_addr.sin_port = htons(CLIENT_PORT);
+        inet_aton(CLIENT_IP, &server_addr.sin_addr);
 
         address_set = 1;
     }
 
-    int sendres = sendto(sock, buf, datalen, 0,
+    sendres = sendto(sock, buf, datalen, 0,
                          (struct sockaddr *)&server_addr,
                          sizeof(server_addr));
-
+#else
+    sendres = write(sock, buf, datalen);
+#endif
     return sendres;
 }
 
 static int recvfrom_client(int sock, char *buf, int buflen)
 {
-    int len = recvfrom(sock, buf, buflen, 0, NULL, NULL);
+    int len;
+#if USE_DTLS
+    len = recvfrom(sock, buf, buflen, 0, NULL, NULL);
+#else
+    len = read(sock, buf, buflen);
+#endif
     return len;
 }
 
@@ -56,12 +67,8 @@ openssl_verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx)
                X509_verify_cert_error_string(err), depth);
     }
 #if 1
-    SSL *ssl;
     BIO *bio;
     char *pem = NULL;
-
-    int sslidx = SSL_get_ex_data_X509_STORE_CTX_idx();
-    ssl = X509_STORE_CTX_get_ex_data(x509_ctx, sslidx);
 
     pem = x509_to_pem(X509_STORE_CTX_get0_cert(x509_ctx));
 
@@ -113,8 +120,30 @@ int main()
                                "../cert/server.pem");
 
     SSL *ssl = SSL_new(ssl_context);
+    enable_debuglog(ssl);
 
-    int sock = BindSocket(SOCK_DGRAM, SERVER_UDP_PORT);
+#if USE_DTLS
+    int sock = BindSocket(TEST_SOCK_TYPE, SERVER_PORT);
+#else
+    int tcpsock = BindSocket(TEST_SOCK_TYPE, SERVER_PORT);
+
+    int lres = listen(tcpsock, 1);
+    if (lres == 0){
+        printf("TCP Listen Success\n");
+    } else {
+        printf("TCP Listen Fail %s\n", strerror(errno));
+    }
+
+    struct sockaddr_in addr;
+    unsigned int addr_len = sizeof(addr);
+
+    int sock = accept(tcpsock, (struct sockaddr*) &addr, &addr_len);
+    if (sock > 0){
+        printf("TCP Accept Success %d\n", sock);
+    } else {
+        printf("TCP Accept Fail %s\n", strerror(errno));
+    }
+#endif
 
     BIO *in_bio = BIO_new(BIO_s_mem());
     BIO *out_bio = BIO_new(BIO_s_mem());
@@ -146,7 +175,7 @@ int main()
         }
         else
         {
-            printf("Server Not Pending\n");
+            // printf("Server Not Pending\n");
         }
 
         int recvlen = recvfrom_client(sock, buf, BUFLEN);
@@ -158,7 +187,7 @@ int main()
         }
         else
         {
-            printf("No data to write at bio\n");
+            // printf("No data to write at bio\n");
         }
 
         if (!SSL_is_init_finished(ssl))
@@ -177,8 +206,9 @@ int main()
             printf("SSL Handshake done... Current Cipher : %s\n",
                    SSL_get_cipher_name(ssl));
 
-            char writebuf[100] = "I'm server.";
-            SSL_write(ssl, writebuf, strlen(writebuf));
+            char writebuf[100];
+            strcpy(writebuf, "I'm server\n\0");
+            SSL_write(ssl, writebuf, strlen(writebuf) + 1);
 
             int ssl_readlen = SSL_read(ssl, buf, sizeof(buf));
             if (ssl_readlen > 0)
@@ -186,7 +216,8 @@ int main()
                 printf("Recvfrom Client : %s\n", buf);
             }
         }
-        sleep(1);
+        // sleep(1);
+        usleep(10000);
     }
 
     printf("Done\n");

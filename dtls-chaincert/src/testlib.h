@@ -9,8 +9,20 @@
 #include <openssl/x509.h>
 #include <openssl/err.h>
 
-#define SERVER_UDP_PORT 5111
-#define CLIENT_UDP_PORT 5112
+#if USE_DTLS
+#define TEST_SOCK_TYPE SOCK_DGRAM
+#else
+#define TEST_SOCK_TYPE SOCK_STREAM
+#endif
+
+// #define SERVER_IP "192.168.1.104"
+// #define CLIENT_IP "192.168.1.211"
+
+#define SERVER_IP "127.0.0.1"
+#define CLIENT_IP "127.0.0.1"
+
+#define SERVER_PORT 35966
+#define CLIENT_PORT 35967
 
 char *ssl_io_errcode_sting(int code);
 
