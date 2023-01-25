@@ -1,10 +1,12 @@
 **
 
 !**/
+build
 
 !*.c
 !*.h
 !*.md
 !*.sh
+!CMakeLists.txt
 
 !.gitignore
