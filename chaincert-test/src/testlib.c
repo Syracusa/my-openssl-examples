@@ -122,7 +122,11 @@ void init_ssl_context_from_file(SSL_CTX **ssl_ctx,
     SSL_CTX_set_cert_store(ssl_context, trust_store);
     SSL_CTX_set_read_ahead(ssl_context, 1);
 
-    add_trust_store_ca_cert_file(trust_store, cacertfile);
+    if (cacertfile){
+        add_trust_store_ca_cert_file(trust_store, cacertfile);
+    } else {
+        fprintf(stderr, "Use root certificate as ca certificate\n");
+    }
     add_trust_store_ca_cert_file(trust_store, rootcacertfile);
 
     int res = SSL_CTX_use_certificate_file(ssl_context,

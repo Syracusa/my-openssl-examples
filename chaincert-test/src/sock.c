@@ -23,6 +23,13 @@ int BindSocket(int type, int port)
 	}
 
 	SetInetAddr(&addr, port);
+	
+	int reuse = 1;
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR,
+        (char*)&reuse, sizeof(reuse)) < 0)
+    {
+        printf("Setting SO_REUSEADDR Error!!\n");
+    }
 
 	SOCK_LEN = sizeof(addr);
 	if (bind(sd, (struct sockaddr *)&addr, SOCK_LEN) < 0)
@@ -31,6 +38,8 @@ int BindSocket(int type, int port)
 			   port,
 			   strerror(errno));
 	}
+
+
 #if 0
 	struct timeval read_timeout;
 	read_timeout.tv_sec = 0;

@@ -115,7 +115,7 @@ int main()
 
     init_ssl_context_from_file(&ssl_context,
                                "../cert/ca.cert.pem",
-                               "../cert/ica.cert.pem",
+                               NULL,
                                "../cert/server.cert.pem",
                                "../cert/server.pem");
 
@@ -142,6 +142,13 @@ int main()
         printf("TCP Accept Success %d\n", sock);
     } else {
         printf("TCP Accept Fail %s\n", strerror(errno));
+    }
+
+	int reuse = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+        (char*)&reuse, sizeof(reuse)) < 0)
+    {
+        printf("Setting SO_REUSEADDR Error!!\n");
     }
 #endif
 
