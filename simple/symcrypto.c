@@ -21,45 +21,55 @@ unsigned char ciphertext[] = {
 
 unsigned char plaintext[100];
 
-static inline void hex_dump(void *addr, int len, FILE *stream)
+#define HEXDUMP_COL 16
+static void hexdump(const void *data, const int len, FILE *stream)
 {
-    fprintf(stream, "length of hexdump = %d\n", len);
-    int            i;
-    unsigned char  buff[17];
-    unsigned char *pc = (unsigned char *)addr;
+    char ascii_buf[HEXDUMP_COL + 1];
+    const unsigned char *ptr = data;
 
-    // Process every byte in the data.
-    for (i = 0; i < len; i++) {
-        // Multiple of 16 means new line (with line offset).
+    ascii_buf[HEXDUMP_COL] = '\0';
 
-        if ((i % 16) == 0) {
-            // Just don't print ASCII for the zeroth line.
-            if (i != 0)
-                fprintf(stream, " %s\n", buff);
+    int linecount = 0;
+    int lineoffset;
+    for (int i = 0; i < len; i++)
+    {
+        lineoffset = i % HEXDUMP_COL;
 
-            // Output the offset.
-            fprintf(stream, " %04x ", i);
-        }
+        /* Print offset if newline */
+        if (lineoffset == 0)
+            fprintf(stream, " %04x ", (unsigned int)i);
 
-        // Now the hex code for the specific character.
-        fprintf(stream, " %02x", pc[i]);
+        /* Add space at every 4 bytes.. */
+        if (lineoffset % 4 == 0)
+            fprintf(stream, " ");
 
-        // And store a printable ASCII character for later.
-        if ((pc[i] < 0x20) || (pc[i] > 0x7e))
-            buff[i % 16] = '.';
+        fprintf(stream, " %02x", ptr[i]);
+        if ((ptr[i] < 0x20) || (ptr[i] > 0x7e))
+            ascii_buf[lineoffset] = '.';
         else
-            buff[i % 16] = pc[i];
-        buff[(i % 16) + 1] = '\0';
+            ascii_buf[lineoffset] = ptr[i];
+
+        /* Print ASCII if end of line */
+        if (lineoffset == HEXDUMP_COL - 1)
+        {
+            fprintf(stream, "    %s\n", ascii_buf);
+            linecount++;
+
+            /* Print additional newline at every 5 lines */
+            if (linecount != 0 && linecount % 5 == 0)
+                fprintf(stream, "\n");
+        }
     }
 
-    // Pad out last line if not exactly 16 characters.
-    while ((i % 16) != 0) {
-        fprintf(stream, " ");
-        i++;
+    for (int i = lineoffset + 1; i < HEXDUMP_COL; i++){
+        lineoffset = i % HEXDUMP_COL;
+        if (lineoffset % 4 == 0)
+            fprintf(stream, " ");
+        fprintf(stream, " ..");
     }
 
-    // And print the final ASCII bit.
-    fprintf(stream, " %s\n", buff);
+    ascii_buf[lineoffset + 1] = '\0';
+    fprintf(stream, "    %s\n", ascii_buf);
 }
 
 static uint32_t init_sym_crypt(int do_encrypt, void *iv)
@@ -104,7 +114,7 @@ uint32_t sym_decrypt(void *cipher_text,
 
     fprintf(stderr, "== Cipher text(Before Decrypt) ==\n");
     int cdlen = cipher_text_len;
-    hex_dump(cipher_text, cdlen, stderr);
+    hexdump(cipher_text, cdlen, stderr);
 
     int ires = init_sym_crypt(0 /* Decrypt */, cipher_text);
     if (ires < 0)
@@ -138,7 +148,7 @@ uint32_t sym_decrypt(void *cipher_text,
 
     fprintf(stderr, "== Plain text(After Decrypt) ==\n");
     int pdlen = *out_plain_text_len;
-    hex_dump(out_plain_text_buf, pdlen, stderr);
+    hexdump(out_plain_text_buf, pdlen, stderr);
 
     return 1;
 }
